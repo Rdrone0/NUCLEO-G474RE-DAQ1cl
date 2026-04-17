@@ -27,7 +27,10 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "state_machine.h"
+#include "datalogger.h"
+#include "timestamp.h"
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -101,7 +104,10 @@ int main(void)
     Error_Handler();
   }
   /* USER CODE BEGIN 2 */
-
+  /* BSP LED must be initialised before StateMachine_Init() uses it.
+     The generated BSP_LED_Init call below is idempotent, so this is safe. */
+  BSP_LED_Init(LED_GREEN);
+  StateMachine_Init();
   /* USER CODE END 2 */
 
   /* Initialize led */
@@ -114,7 +120,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-
+    StateMachine_Process();
+    DataLogger_MainLoopProcess();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -168,7 +175,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+/* HAL callbacks are implemented in datalogger.c and state_machine.c */
 /* USER CODE END 4 */
 
 /**

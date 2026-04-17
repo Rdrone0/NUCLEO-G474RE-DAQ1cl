@@ -2,18 +2,8 @@
 /**
  ******************************************************************************
   * @file    user_diskio.c
-  * @brief   This file includes a diskio driver skeleton to be completed by the user.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
+  * @brief   FatFs diskio driver — delegates to sd_spi.c (polling SPI).
+ ******************************************************************************
   */
  /* USER CODE END Header */
 
@@ -35,12 +25,12 @@
 /* Includes ------------------------------------------------------------------*/
 #include <string.h>
 #include "ff_gen_drv.h"
+#include "sd_spi.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 
 /* Private variables ---------------------------------------------------------*/
-/* Disk status */
 static volatile DSTATUS Stat = STA_NOINIT;
 
 /* USER CODE END DECL */
@@ -81,7 +71,9 @@ DSTATUS USER_initialize (
 )
 {
   /* USER CODE BEGIN INIT */
+    if (pdrv != 0) return STA_NOINIT;
     Stat = STA_NOINIT;
+    if (SdSpi_Init() == 0) Stat = 0;
     return Stat;
   /* USER CODE END INIT */
 }
@@ -96,7 +88,8 @@ DSTATUS USER_status (
 )
 {
   /* USER CODE BEGIN STATUS */
-    Stat = STA_NOINIT;
+    if (pdrv != 0) return STA_NOINIT;
+    Stat = (SdSpi_Status() == 0) ? 0 : STA_NOINIT;
     return Stat;
   /* USER CODE END STATUS */
 }
@@ -117,6 +110,11 @@ DRESULT USER_read (
 )
 {
   /* USER CODE BEGIN READ */
+    if (pdrv != 0 || Stat & STA_NOINIT) return RES_NOTRDY;
+    for (UINT i = 0; i < count; i++) {
+        if (SdSpi_ReadBlock(sector + i, buff + (i * 512)) != 0)
+            return RES_ERROR;
+    }
     return RES_OK;
   /* USER CODE END READ */
 }
@@ -138,7 +136,11 @@ DRESULT USER_write (
 )
 {
   /* USER CODE BEGIN WRITE */
-  /* USER CODE HERE */
+    if (pdrv != 0 || Stat & STA_NOINIT) return RES_NOTRDY;
+    for (UINT i = 0; i < count; i++) {
+        if (SdSpi_WriteBlock(sector + i, buff + (i * 512)) != 0)
+            return RES_ERROR;
+    }
     return RES_OK;
   /* USER CODE END WRITE */
 }
@@ -159,8 +161,31 @@ DRESULT USER_ioctl (
 )
 {
   /* USER CODE BEGIN IOCTL */
-    DRESULT res = RES_ERROR;
-    return res;
+    if (pdrv != 0 || Stat & STA_NOINIT) return RES_NOTRDY;
+
+    switch (cmd) {
+        case CTRL_SYNC:
+            SdSpi_Sync();
+            return RES_OK;
+
+        case GET_SECTOR_SIZE:
+            *(WORD *)buff = 512;
+            return RES_OK;
+
+        case GET_BLOCK_SIZE:
+            *(DWORD *)buff = 1;
+            return RES_OK;
+
+        case GET_SECTOR_COUNT: {
+            uint32_t sc = SdSpi_GetSectorCount();
+            if (sc == 0) return RES_ERROR;
+            *(DWORD *)buff = sc;
+            return RES_OK;
+        }
+
+        default:
+            return RES_PARERR;
+    }
   /* USER CODE END IOCTL */
 }
 #endif /* _USE_IOCTL == 1 */
